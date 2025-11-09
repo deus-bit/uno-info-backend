@@ -12,7 +12,7 @@ class UserController extends Controller
 {
     public function index()
     {
-        $users = User::paginate();
+        $users = User::with('roles')->paginate();
         return UserResource::collection($users);
     }
 
@@ -28,6 +28,8 @@ class UserController extends Controller
                 Rule::unique("users"),
             ],
             "password" => ["required", "string", "min:8"],
+            'role_ids' => ['sometimes', 'array'],
+            'role_ids.*' => ['exists:roles,id'],
         ]);
 
         $user = User::create([
@@ -36,12 +38,16 @@ class UserController extends Controller
             "password" => Hash::make($request->password),
         ]);
 
-        return new UserResource($user);
+        if ($request->has('role_ids')) {
+            $user->roles()->attach($request->input('role_ids'));
+        }
+
+        return new UserResource($user->load('roles'));
     }
 
     public function show(User $user)
     {
-        return new UserResource($user);
+        return new UserResource($user->load('roles'));
     }
 
     public function update(Request $request, User $user)
@@ -57,6 +63,8 @@ class UserController extends Controller
                 Rule::unique("users")->ignore($user->id),
             ],
             "password" => ["sometimes", "required", "string", "min:8"],
+            'role_ids' => ['sometimes', 'array'],
+            'role_ids.*' => ['exists:roles,id'],
         ]);
 
         $userData = $request->only(["name", "email"]);
@@ -65,7 +73,12 @@ class UserController extends Controller
         }
 
         $user->update($userData);
-        return new UserResource($user);
+
+        if ($request->has('role_ids')) {
+            $user->roles()->sync($request->input('role_ids'));
+        }
+
+        return new UserResource($user->load('roles'));
     }
 
     public function destroy(User $user)
