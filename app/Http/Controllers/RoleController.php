@@ -11,7 +11,7 @@ class RoleController extends Controller
 {
     public function index()
     {
-        $roles = Role::paginate();
+        $roles = Role::with('permissions')->paginate();
         return RoleResource::collection($roles);
     }
 
@@ -19,30 +19,47 @@ class RoleController extends Controller
     {
         $request->validate([
             "name" => ["required", "string", "max:255", Rule::unique("roles")],
+            'description' => ['nullable', 'string'],
+            'permission_ids' => ['sometimes', 'array'],
+            'permission_ids.*' => ['exists:permissions,id'],
         ]);
 
-        $role = Role::create($request->all());
-        return new RoleResource($role);
+        $role = Role::create($request->only(['name', 'description']));
+
+        if ($request->has('permission_ids')) {
+            $role->permissions()->attach($request->input('permission_ids'));
+        }
+
+        return new RoleResource($role->load('permissions'));
     }
 
     public function show(Role $role)
     {
-        return new RoleResource($role);
+        return new RoleResource($role->load('permissions'));
     }
 
     public function update(Request $request, Role $role)
     {
         $request->validate([
             "name" => [
+                "sometimes", // Changed to sometimes for PATCH semantics
                 "required",
                 "string",
                 "max:255",
                 Rule::unique("roles")->ignore($role->id),
             ],
+            'description' => ['sometimes', 'nullable', 'string'],
+            'permission_ids' => ['sometimes', 'array'],
+            'permission_ids.*' => ['exists:permissions,id'],
         ]);
 
-        $role->update($request->all());
-        return new RoleResource($role);
+        $role->update($request->only(['name', 'description']));
+
+        if ($request->has('permission_ids')) {
+            $role->permissions()->sync($request->input('permission_ids'));
+        }
+
+        return new RoleResource($role->load('permissions'));
     }
 
     public function destroy(Role $role)
